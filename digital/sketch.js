@@ -25,7 +25,7 @@ function draw() {
 
   lightLevel = lerp(lightLevel, targetLightLevel, 0.08);
 
-  const frameT = frameCount * 0.01;
+  const frameT = frameCount * 0.0045;
   const paintingArea = getPaintingArea();
 
   push();
@@ -67,6 +67,12 @@ function buildCellsFromImage() {
         baseScale,
         energyBias,
         phase: random(TWO_PI),
+        shapeWFactor: random(0.82, 1.16),
+        shapeHFactor: random(0.82, 1.16),
+        accentWFactor: random(0.2, 0.48),
+        accentHFactor: random(0.2, 0.6),
+        accentOffsetX: random(-0.18, 0.18),
+        accentOffsetY: random(-0.18, 0.18),
       });
     }
   }
@@ -118,11 +124,11 @@ function drawLivingCells(areaW, areaH, frameT) {
     const outB = lerp(bb * 0.36, bb, fade);
     const outA = lerp(18, 92, fade);
 
-    const wobbleX = sin(frameT * 1.9 + cell.phase) * cw * 0.05 * vitality;
-    const wobbleY = cos(frameT * 1.4 + cell.phase) * ch * 0.05 * vitality;
+    const wobbleX = sin(frameT * 0.45 + cell.phase) * cw * 0.05 * vitality;
+    const wobbleY = cos(frameT * 0.33 + cell.phase) * ch * 0.05 * vitality;
 
-    const rw = cw * random(0.82, 1.16) * grow;
-    const rh = ch * random(0.82, 1.16) * grow;
+    const rw = cw * cell.shapeWFactor * grow;
+    const rh = ch * cell.shapeHFactor * grow;
 
     fill(hh, outS, outB, outA);
     rect(
@@ -137,11 +143,11 @@ function drawLivingCells(areaW, areaH, frameT) {
     const accentChance = noise(cell.gx * 0.23 + 7, cell.gy * 0.17 - 4);
     if (accentChance > 0.8 && vitality > 0.2) {
       fill(hh, min(outS + 12, 100), max(outB - 40, 8), outA * 0.65);
-      const aw = rw * random(0.2, 0.48);
-      const ah = rh * random(0.2, 0.6);
+      const aw = rw * cell.accentWFactor;
+      const ah = rh * cell.accentHFactor;
       rect(
-        px - aw * 0.5 + wobbleX + random(-cw * 0.18, cw * 0.18),
-        py - ah * 0.5 + wobbleY + random(-ch * 0.18, ch * 0.18) + dyingDrop,
+        px - aw * 0.5 + wobbleX + cell.accentOffsetX * cw,
+        py - ah * 0.5 + wobbleY + cell.accentOffsetY * ch + dyingDrop,
         aw,
         ah,
         min(aw, ah) * 0.25
