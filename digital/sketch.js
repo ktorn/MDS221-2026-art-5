@@ -26,6 +26,8 @@ let lastSensorRaw = null;
 let lastMessageAt = 0;
 let adaptiveMin = null;
 let adaptiveMax = null;
+let stemSegments = [];
+let leafNodes = [];
 
 function preload() {
   sourceImage = loadImage("./assets/image.png");
@@ -43,6 +45,7 @@ function setup() {
     };
   });
   buildCellsFromImage();
+  initGardenScene();
   connectWebSocket();
 }
 
@@ -59,6 +62,7 @@ function draw() {
   translate(paintingArea.x, paintingArea.y);
   drawPaperBackdrop(paintingArea.w, paintingArea.h, frameT);
   drawLivingCells(paintingArea.w, paintingArea.h, frameT);
+  drawGardenStory(paintingArea.w, paintingArea.h, frameT);
   pop();
 
   drawDebugPane();
@@ -191,6 +195,148 @@ function pickPatchSpan() {
   if (r < 0.82) return 2;
   if (r < 0.95) return 3;
   return 4;
+}
+
+function initGardenScene() {
+  stemSegments = [];
+  leafNodes = [];
+
+  for (let i = 0; i < 11; i++) {
+    stemSegments.push({
+      phase: random(TWO_PI),
+      lean: random(-1, 1),
+      sway: random(0.5, 1.3),
+    });
+  }
+
+  for (let i = 0; i < 14; i++) {
+    const baseT = map(i, 0, 13, 0.1, 0.97);
+    for (const side of [-1, 1]) {
+      leafNodes.push({
+        t: constrain(baseT + random(-0.015, 0.015), 0.08, 0.98),
+        side,
+        size: random(0.026, 0.058),
+        phase: random(TWO_PI),
+        curl: random(0.8, 1.45),
+      });
+    }
+  }
+}
+
+function drawGardenStory(w, h, frameT) {
+  const growth = constrain(map(lightLevel, 0, 1, 0.05, 1), 0, 1);
+  const stemGrowth = constrain(map(growth, 0.0, 0.72, 0, 1), 0, 1);
+  const leafGrowth = constrain(map(growth, 0.3, 1, 0, 1), 0, 1);
+
+  drawOrganicPlant(w, h, frameT, stemGrowth, leafGrowth);
+}
+
+function drawOrganicPlant(w, h, frameT, stemGrowth, leafGrowth) {
+  const rootX = w * 0.5;
+  const rootY = h * 0.95;
+  const fullHeight = h * 0.7;
+  const tipY = rootY - fullHeight * stemGrowth;
+
+  drawStemGlow(rootX, rootY, tipY, w, stemGrowth);
+  drawMainStem(rootX, rootY, tipY, w, frameT, stemGrowth);
+  drawLeavesAlongStem(rootX, rootY, tipY, w, h, frameT, leafGrowth);
+  drawPlantBud(rootX, tipY, w, h, frameT, stemGrowth, leafGrowth);
+}
+
+function drawStemGlow(rootX, rootY, tipY, w, stemGrowth) {
+  push();
+  noFill();
+  stroke(122, 28, 95, 12 + stemGrowth * 20);
+  strokeWeight(18 + stemGrowth * 20);
+  bezier(
+    rootX,
+    rootY,
+    rootX - w * 0.05,
+    lerp(rootY, tipY, 0.36),
+    rootX + w * 0.04,
+    lerp(rootY, tipY, 0.72),
+    rootX,
+    tipY
+  );
+  pop();
+}
+
+function drawMainStem(rootX, rootY, tipY, w, frameT, stemGrowth) {
+  push();
+  noFill();
+  for (let i = 0; i < stemSegments.length; i++) {
+    const seg = stemSegments[i];
+    const t = (i + 1) / stemSegments.length;
+    if (t > stemGrowth) break;
+
+    const localTopY = lerp(rootY, tipY, t);
+    const prevT = i / stemSegments.length;
+    const prevY = lerp(rootY, tipY, prevT);
+    const life = constrain((stemGrowth - t) * 6 + 0.25, 0.22, 1);
+    const sway = sin(frameT * seg.sway + seg.phase) * w * 0.01 * life;
+
+    stroke(122, 58, 24 + life * 34, 90);
+    strokeWeight(lerp(8.2, 3.1, t) * (0.86 + stemGrowth * 0.28));
+    line(
+      rootX + sway * (0.35 + prevT * 0.4),
+      prevY,
+      rootX + sway * (0.35 + t * 0.45) + seg.lean * w * 0.006 * t,
+      localTopY
+    );
+  }
+  pop();
+}
+
+function drawLeavesAlongStem(rootX, rootY, tipY, w, h, frameT, leafGrowth) {
+  if (leafGrowth <= 0.001) return;
+  push();
+  for (const leaf of leafNodes) {
+    const open = constrain((leafGrowth - (1 - leaf.t)) * 3.2, 0, 1);
+    if (open <= 0.001) continue;
+
+    const stemY = lerp(rootY, tipY, leaf.t);
+    const stemPulse = sin(frameT * 0.8 + leaf.phase) * w * 0.005;
+    const baseX = rootX + stemPulse * leaf.side * (0.4 + leaf.t);
+    const baseY = stemY;
+
+    const len = h * leaf.size * (0.34 + open * 1.0);
+    const topBias = pow(leaf.t, 1.45);
+    const spread = 0.34 + 1.5 * topBias;
+    const openEase = pow(open, 1.1);
+    const angleMax = lerp(radians(42), radians(86), topBias);
+    const angle = lerp(radians(8), angleMax, openEase);
+    const reach = leaf.side * w * 0.18 * spread * sin(angle);
+    const rise = len * cos(angle) * 1.02;
+    const curl = sin(frameT * 1.4 + leaf.phase) * h * 0.018 * leaf.curl * open;
+    const tipX = baseX + reach;
+    const tipYLeaf = baseY - rise + curl;
+    const branchAngle = atan2(tipYLeaf - baseY, tipX - baseX);
+
+    // One single long triangle per leaf.
+    noStroke();
+    fill(122, 60, 22 + open * 40, 92);
+    push();
+    translate(baseX, baseY);
+    rotate(branchAngle);
+    const triLen = dist(baseX, baseY, tipX, tipYLeaf);
+    const triBaseW = w * 0.008 * (0.55 + open * 0.85) * (0.7 + topBias * 0.7);
+    triangle(triLen, 0, 0, -triBaseW, 0, triBaseW);
+    pop();
+  }
+  pop();
+}
+
+function drawPlantBud(rootX, tipY, w, h, frameT, stemGrowth, leafGrowth) {
+  const budOpen = constrain(map(leafGrowth, 0.25, 1, 0, 1), 0, 1);
+  const bob = sin(frameT * 1.6) * h * 0.006 * (0.3 + stemGrowth);
+
+  push();
+  noStroke();
+  fill(124, 56, 24 + stemGrowth * 26, 94);
+  ellipse(rootX, tipY + bob, w * 0.024 * (0.8 + budOpen * 0.45), h * 0.042);
+  fill(0, 0, 100, 16);
+  ellipse(rootX - w * 0.0035, tipY - h * 0.007 + bob, w * 0.008, h * 0.01);
+  pop();
 }
 
 function drawDebugPane() {
