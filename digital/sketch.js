@@ -28,6 +28,7 @@ let adaptiveMin = null;
 let adaptiveMax = null;
 let stemSegments = [];
 let leafNodes = [];
+let showDebugPane = true;
 
 function preload() {
   sourceImage = loadImage("./assets/image.png");
@@ -65,7 +66,9 @@ function draw() {
   drawGardenStory(paintingArea.w, paintingArea.h, frameT);
   pop();
 
-  drawDebugPane();
+  if (showDebugPane) {
+    drawDebugPane();
+  }
 }
 
 function buildCellsFromImage() {
@@ -356,7 +359,7 @@ function drawDebugPane() {
   textSize(13);
   text(`lightLevel: ${nf(lightLevel, 1, 2)}`, panelX + 12, panelY + 46);
   text(`target: ${nf(targetLightLevel, 1, 2)}`, panelX + 12, panelY + 64);
-  text("keys: UP increase, DOWN decrease", panelX + 12, panelY + 83);
+  text("keys: UP/DOWN light, D toggle pane", panelX + 12, panelY + 83);
   text(`ws: ${socketStatus}`, panelX + 12, panelY + 102);
   text(`raw: ${lastSensorRaw ?? "-"}`, panelX + 200, panelY + 102);
   text(`range: ${formatRangeValue(adaptiveMin)} - ${formatRangeValue(adaptiveMax)}`, panelX + 12, panelY + 121);
@@ -373,7 +376,9 @@ function drawDebugPane() {
 }
 
 function keyPressed() {
-  if (keyCode === UP_ARROW) {
+  if (key === "d" || key === "D") {
+    showDebugPane = !showDebugPane;
+  } else if (keyCode === UP_ARROW) {
     targetLightLevel = constrain(targetLightLevel + 0.07, 0, 1);
   } else if (keyCode === DOWN_ARROW) {
     targetLightLevel = constrain(targetLightLevel - 0.07, 0, 1);
