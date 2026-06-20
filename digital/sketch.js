@@ -60,8 +60,6 @@ function draw() {
   drawPaperBackdrop(paintingArea.w, paintingArea.h, frameT);
   drawLivingCells(paintingArea.w, paintingArea.h, frameT);
   pop();
-
-  drawDebugPane();
 }
 
 function buildCellsFromImage() {
