@@ -11,14 +11,20 @@ let paletteColors = [];
 let lightLevel = 0.7;
 let targetLightLevel = 0.7;
 
-const DEFAULT_ESP_HOST = "10.20.91.1";
-const WS_PORT = (() => {
-  const maybePort = new URLSearchParams(window.location.search).get("port");
-  const parsedPort = maybePort ? parseInt(maybePort, 10) : 81;
-  return Number.isFinite(parsedPort) && parsedPort > 0 ? parsedPort : 81;
-})();
-const ESP_HOST =
-  new URLSearchParams(window.location.search).get("host") || DEFAULT_ESP_HOST;
+const APP_SECRETS = window.APP_SECRETS || {};
+const REGISTRY_BASE_URL =
+  APP_SECRETS.registryBaseUrl || "https://esp-device-registry.ktorn.workers.dev";
+const DEFAULT_DEVICE_ID = APP_SECRETS.deviceId || "MDS221-2026-5";
+
+const URL_CONFIG = readUrlConfig();
+let wsUrl = hasDirectWs(URL_CONFIG)
+  ? URL_CONFIG.ws || `ws://${URL_CONFIG.wsHost}:${URL_CONFIG.wsPort}`
+  : null;
+let registryState = needsRegistryLookup(URL_CONFIG)
+  ? "resolving"
+  : hasDirectWs(URL_CONFIG)
+    ? "bypassed"
+    : "no token";
 
 let socket = null;
 let socketStatus = "idle";
@@ -26,6 +32,7 @@ let lastSensorRaw = null;
 let lastMessageAt = 0;
 let adaptiveMin = null;
 let adaptiveMax = null;
+let showDebugPane = true;
 
 function preload() {
   sourceImage = loadImage("./assets/image.png");
@@ -43,7 +50,64 @@ function setup() {
     };
   });
   buildCellsFromImage();
-  connectWebSocket();
+  initWebSocketConnection();
+}
+
+function readUrlConfig() {
+  const params = new URLSearchParams(window.location.search);
+  const wsHost = params.get("wsHost") || params.get("host");
+  return {
+    deviceId: params.get("deviceId") || DEFAULT_DEVICE_ID,
+    token: params.get("token") || APP_SECRETS.registryToken || null,
+    registry: params.get("registry") || REGISTRY_BASE_URL,
+    ws: params.get("ws"),
+    wsHost,
+    wsPort: params.get("wsPort") || params.get("port") || "81",
+  };
+}
+
+function hasDirectWs(config) {
+  return !!(config.ws || config.wsHost);
+}
+
+function needsRegistryLookup(config) {
+  return !hasDirectWs(config) && !!(config.deviceId && config.token);
+}
+
+async function lookupDeviceEndpoint(config) {
+  const base = config.registry.replace(/\/$/, "");
+  const url = new URL(`${base}/lookup`);
+  url.searchParams.set("device_id", config.deviceId);
+  url.searchParams.set("token", config.token);
+
+  const res = await fetch(url.toString());
+  if (!res.ok) {
+    throw new Error(`lookup ${res.status}`);
+  }
+  const data = await res.json();
+  if (!data.lan_ip) throw new Error("no lan_ip");
+  const port = data.ws_port || 81;
+  return `ws://${data.lan_ip}:${port}`;
+}
+
+function initWebSocketConnection() {
+  if (needsRegistryLookup(URL_CONFIG)) {
+    lookupDeviceEndpoint(URL_CONFIG)
+      .then((url) => {
+        wsUrl = url;
+        registryState = "ok";
+        connectWebSocket();
+      })
+      .catch((err) => {
+        registryState = err.message || "failed";
+        socketStatus = `registry ${registryState}`;
+      });
+  } else if (hasDirectWs(URL_CONFIG)) {
+    registryState = "bypassed";
+    connectWebSocket();
+  } else {
+    connectWebSocket();
+  }
 }
 
 function draw() {
@@ -60,6 +124,10 @@ function draw() {
   drawPaperBackdrop(paintingArea.w, paintingArea.h, frameT);
   drawLivingCells(paintingArea.w, paintingArea.h, frameT);
   pop();
+
+  if (showDebugPane) {
+    drawDebugPane();
+  }
 }
 
 function buildCellsFromImage() {
@@ -208,8 +276,9 @@ function drawDebugPane() {
   textSize(13);
   text(`lightLevel: ${nf(lightLevel, 1, 2)}`, panelX + 12, panelY + 46);
   text(`target: ${nf(targetLightLevel, 1, 2)}`, panelX + 12, panelY + 64);
-  text("keys: UP increase, DOWN decrease", panelX + 12, panelY + 83);
+  text("keys: UP/DOWN light, D toggle pane", panelX + 12, panelY + 83);
   text(`ws: ${socketStatus}`, panelX + 12, panelY + 102);
+  text(`registry: ${registryState}`, panelX + 200, panelY + 83);
   text(`raw: ${lastSensorRaw ?? "-"}`, panelX + 200, panelY + 102);
   text(`range: ${formatRangeValue(adaptiveMin)} - ${formatRangeValue(adaptiveMax)}`, panelX + 12, panelY + 121);
 
@@ -225,7 +294,9 @@ function drawDebugPane() {
 }
 
 function keyPressed() {
-  if (keyCode === UP_ARROW) {
+  if (key === "d" || key === "D") {
+    showDebugPane = !showDebugPane;
+  } else if (keyCode === UP_ARROW) {
     targetLightLevel = constrain(targetLightLevel + 0.07, 0, 1);
   } else if (keyCode === DOWN_ARROW) {
     targetLightLevel = constrain(targetLightLevel - 0.07, 0, 1);
@@ -260,23 +331,27 @@ function windowResized() {
 
 function connectWebSocket() {
   if (socket && socket.readyState === WebSocket.OPEN) return;
-  if (!ESP_HOST) {
-    socketStatus = "set ?host= in URL";
+  if (!wsUrl) {
+    socketStatus =
+      registryState === "resolving"
+        ? "registry lookup…"
+        : needsRegistryLookup(URL_CONFIG)
+          ? `registry ${registryState}`
+          : "set secrets.js or ?wsHost=";
     return;
   }
 
-  const url = `ws://${ESP_HOST}:${WS_PORT}`;
-  socketStatus = `connecting ${url}...`;
+  socketStatus = `connecting ${wsUrl}...`;
 
   try {
-    socket = new WebSocket(url);
+    socket = new WebSocket(wsUrl);
   } catch (error) {
     socketStatus = `WebSocket error: ${error.message}`;
     return;
   }
 
   socket.onopen = () => {
-    socketStatus = `connected ${ESP_HOST}:${WS_PORT}`;
+    socketStatus = `connected ${wsUrl.replace(/^ws:\/\//, "")}`;
   };
 
   socket.onclose = () => {

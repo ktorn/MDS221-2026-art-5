@@ -6,4 +6,4 @@
 
 #define REGISTER_BASE_URL "https://esp-device-registry.xxx.workers.dev"
 #define REGISTER_SECRET "same-as-wrangler-secret-REGISTER_SECRET"
-#define DEVICE_CODE_ID "your-project-or-team-id"
+#define DEVICE_CODE_ID "MDS221-2026-5"
