@@ -1,0 +1,30 @@
+ARTWORK
+Garden
+
+CREATOR
+Cassie, Kelly
+
+NFT PLATFORM
+Teia.art
+
+BLOCKCHAIN
+Tezos
+
+DATE
+June 2026
+
+TAGS
+interactive, installation, usj, mds221, p5js, generative, garden, klee, painting, patchwork, teia
+
+DESCRIPTION
+This work pays tribute to Paul Klee's Southern Garden. Using flowers, abstract geometric shapes and colors as its carriers, through the emotional flow line of growth - resonance - withering, it interprets the garden spirit of Klee's color is emotion, form is life. Only through the blooming and withering of flowers and the breathing of colors, the viewers become emotional participants. In the reflection of the natural rhythm, they complete self-dialogue, healing and inner peace.
+
+This is an interactive artwork. Click the canvas to focus, then use the keyboard:
+
+Up arrow — increase light (patches bloom brighter, grow, and lift)
+Down arrow — decrease light (patches fade, shrink, and settle)
+
+Default behaviour on load:
+The living patchwork painting animates immediately at a gentle mid-light level. Color blocks breathe with subtle wobble and watercolor wash edges while paper texture drifts slowly. No input is required for the piece to feel alive.
+
+Created by Cassie and Kelly as part of MDS221 – Interactive Multimedia Installation, University of Saint Joseph (USJ), Macau.
